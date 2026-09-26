@@ -1,0 +1,259 @@
+// Widget de la agenda del semestre 2026B · para Scriptable
+// Tamaños: chico (Hoy), mediano (Tareas) y grande (Todo).
+
+// ══ LO ÚNICO QUE HAY QUE CAMBIAR ══════════════════════════
+// Copia estos tres datos de tu agenda: botón de sincronizar → "Sincronizar y respaldar".
+const SUPABASE_URL = "";   // la URL del proyecto, entre las comillas
+const LLAVE = "";          // la llave anon (public), entre las comillas
+const CODIGO = "";         // tu código secreto, entre las comillas
+// ══════════════════════════════════════════════════════════
+
+const URL_APP = "https://vmmterminus-star.github.io/agenda-uni/";
+
+/* ---------- colores de la agenda (claro / oscuro) ---------- */
+function dyn(a, b){ return Color.dynamic(new Color(a), new Color(b)); }
+const C = {
+  bg:    dyn("#FFFFFF", "#23201D"),
+  txt:   dyn("#33302C", "#EDE7DF"),
+  mut:   dyn("#7A7267", "#A79E92"),
+  hint:  dyn("#A79E92", "#7A7267"),
+  acc:   dyn("#C97B5A", "#D9906F"),
+  soft:  dyn("#FBF9F5", "#2E2A26"),
+  line:  dyn("#E9E3DA", "#3A3530"),
+  danbg: dyn("#FBE9E4", "#4A2A24"), dantx: dyn("#8C3325", "#F0A594"), dan: dyn("#B5503F", "#E08472"),
+  ambbg: dyn("#F0E8D8", "#453A26"), ambtx: dyn("#6E5522", "#E3C98F"), amb: dyn("#A98545", "#D4B06C"),
+  grn:   dyn("#5F8A7D", "#8DBBAE")
+};
+const F = {
+  tit:  Font.boldRoundedSystemFont(11),
+  big:  Font.boldRoundedSystemFont(34),
+  fila: Font.regularRoundedSystemFont(12),
+  fec:  Font.mediumRoundedSystemFont(11),
+  cls:  Font.semiboldRoundedSystemFont(13),
+  sm:   Font.regularRoundedSystemFont(11),
+  band: Font.boldRoundedSystemFont(9)
+};
+
+/* ---------- fechas: se calculan aquí, al momento ---------- */
+const DIAS   = ["dom","lun","mar","mié","jue","vie","sáb"];
+const DIAS_L = ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
+const MESC   = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+const MS = 86400000;
+function pd(s){ const p = s.split("-"); return new Date(+p[0], +p[1]-1, +p[2]); }
+function hoy0(){ const d = new Date(); d.setHours(0,0,0,0); return d; }
+function fmt(d){ return d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2)+"-"+("0"+d.getDate()).slice(-2); }
+function dif(s){ return Math.round((pd(s) - hoy0()) / MS); }
+function ahoraHM(){ const d = new Date(); return ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2); }
+
+function etiqueta(T){
+  const d = dif(T.f), h = T.h ? " "+T.h : "";
+  if(d < 0)  return d === -1 ? "ayer" : (-d)+" días tarde";
+  if(d === 0) return "hoy"+h;
+  if(d === 1) return "mañana"+h;
+  const x = pd(T.f);
+  return d <= 6 ? DIAS[x.getDay()]+" "+x.getDate() : x.getDate()+" "+MESC[x.getMonth()];
+}
+function nivel(T){ const d = dif(T.f); return d < 0 ? "atr" : (d <= 1 ? "hoy" : "no"); }
+
+/* la siguiente clase que todavía no termina */
+function siguientesClases(R){
+  const hs = fmt(hoy0()), hm = ahoraHM();
+  const cla = (R.cla || []).filter(c => c.d > hs || (c.d === hs && (c.hf || c.hi || "99") > hm));
+  return cla;
+}
+function cuandoClase(c){
+  const d = dif(c.d);
+  if(d === 0) return c.hi;
+  if(d === 1) return "mañana "+c.hi;
+  return DIAS[pd(c.d).getDay()]+" "+c.hi;
+}
+
+/* estado de Proyecto 9, igual que la ruta de la app */
+function rutaP9(R){
+  const s1 = pd(R.s1), h = hoy0();
+  const lunes = new Date(h); lunes.setDate(h.getDate() - ((h.getDay()+6) % 7));
+  const sem = Math.max(1, Math.min(17, Math.round((lunes - s1) / (7*MS)) + 1));
+  let n = 1, nombre = "";
+  (R.et || []).forEach((E, i) => { if(E.a <= sem && sem <= E.b){ n = i+1; nombre = E.n; } });
+  let atraso = 0;
+  (R.tar || []).forEach(T => { if(!T.e) return; const d = dif(T.f); if(d < 0) atraso = Math.max(atraso, Math.floor(-d/7)); });
+  if(atraso >= 2) return { n, nombre, total:(R.et||[]).length, txt:"Atraso de "+atraso+" sem", col:C.dan };
+  if(atraso === 1) return { n, nombre, total:(R.et||[]).length, txt:"En riesgo", col:C.amb };
+  return { n, nombre, total:(R.et||[]).length, txt:"Al día", col:C.grn };
+}
+
+/* ---------- piezas ---------- */
+function titulo(p, txt){
+  const t = p.addText(txt.toUpperCase()); t.font = F.tit; t.textColor = C.acc; t.lineLimit = 1;
+  return t;
+}
+function texto(p, txt, font, color, lineas){
+  const t = p.addText(txt); t.font = font; t.textColor = color; t.lineLimit = lineas || 1;
+  return t;
+}
+function fila(p, T){
+  const nv = nivel(T);
+  const r = p.addStack(); r.layoutHorizontally(); r.centerAlignContent();
+  r.setPadding(3, 5, 3, 6); r.cornerRadius = 6;
+  r.backgroundColor = nv === "atr" ? C.danbg : (nv === "hoy" ? C.ambbg : C.soft);
+  const s = r.addStack(); s.size = new Size(3, 13); s.cornerRadius = 1.5; s.backgroundColor = new Color(T.c || "#A79E92");
+  r.addSpacer(5);
+  texto(r, T.t, F.fila, C.txt);
+  r.addSpacer();
+  r.addSpacer(4);
+  texto(r, etiqueta(T), F.fec, nv === "atr" ? C.dantx : (nv === "hoy" ? C.ambtx : C.mut));
+  p.addSpacer(3);
+}
+function banda(p, txt){
+  p.addSpacer(3);
+  texto(p, txt.toUpperCase(), F.band, C.hint);
+  p.addSpacer(2);
+}
+
+/* ---------- los tres tamaños ---------- */
+function chico(w, R){
+  const hs = fmt(hoy0());
+  const hoyN = R.tar.filter(T => T.f === hs).length;
+  const atr  = R.tar.filter(T => T.f < hs).length;
+  titulo(w, "Hoy");
+  w.addSpacer(2);
+  texto(w, String(hoyN), F.big, C.txt);
+  let sub = hoyN === 1 ? "pendiente" : "pendientes";
+  if(!hoyN) sub = "nada vence hoy";
+  if(atr) sub += " · " + atr + (atr === 1 ? " atrasada" : " atrasadas");
+  texto(w, sub, F.sm, atr ? C.dantx : C.mut);
+  w.addSpacer();
+  const sig = siguientesClases(R)[0];
+  texto(w, "Siguiente clase", F.sm, C.mut);
+  if(sig){
+    texto(w, sig.n, F.cls, C.txt);
+    texto(w, cuandoClase(sig) + (sig.a ? " · " + sig.a : ""), F.sm, C.mut);
+  } else texto(w, "ninguna pronto", F.cls, C.txt);
+}
+
+function mediano(w, R){
+  const cab = w.addStack(); cab.layoutHorizontally();
+  titulo(cab, "Tareas"); cab.addSpacer();
+  const lista = R.tar.slice(0, 4);
+  if(R.tar.length > 4) texto(cab, "+" + (R.tar.length - 4) + " más", F.sm, C.hint);
+  w.addSpacer(6);
+  if(!lista.length) texto(w, "Nada pendiente. Vas al corriente.", F.fila, C.mut);
+  lista.forEach(T => fila(w, T));
+  w.addSpacer();
+}
+
+function grande(w, R){
+  const h = hoy0();
+  titulo(w, DIAS_L[h.getDay()] + " " + h.getDate());
+  w.addSpacer(4);
+  const cls = siguientesClases(R), hs = fmt(h);
+  const hoyC = cls.filter(c => c.d === hs), luego = cls.find(c => c.d > hs);
+  if(hoyC.length){
+    const c = hoyC[0];
+    texto(w, c.n + " " + c.hi + (c.hf ? "–" + c.hf : ""), F.cls, C.txt);
+    const extra = [];
+    if(c.a) extra.push(c.a);
+    if(hoyC[1]) extra.push("luego " + hoyC[1].n + " " + hoyC[1].hi);
+    else if(luego) extra.push(cuandoClase(luego) + " " + luego.n);
+    texto(w, extra.join(" · "), F.sm, C.mut);
+  } else {
+    texto(w, "Sin más clases hoy", F.cls, C.txt);
+    if(luego) texto(w, "Siguiente: " + luego.n + " " + cuandoClase(luego), F.sm, C.mut);
+  }
+  w.addSpacer(4);
+
+  const dom = new Date(h); dom.setDate(h.getDate() + (7 - h.getDay()) % 7);
+  const domS = fmt(dom);
+  const grupos = [
+    ["Atrasado y hoy", R.tar.filter(T => T.f <= hs)],
+    ["Esta semana",    R.tar.filter(T => T.f > hs && T.f <= domS)],
+    ["Lo que viene",   R.tar.filter(T => T.f > domS)]
+  ];
+  let cupo = 7;
+  if(!R.tar.length){ w.addSpacer(8); texto(w, "Nada pendiente. Vas al corriente.", F.fila, C.mut); }
+  grupos.forEach(([nom, ts]) => {
+    if(!ts.length || cupo <= 0) return;
+    banda(w, nom);
+    ts.slice(0, cupo).forEach(T => fila(w, T));
+    cupo -= Math.min(cupo, ts.length);
+  });
+  w.addSpacer();
+
+  const P = rutaP9(R);
+  const pie = w.addStack(); pie.layoutHorizontally();
+  texto(pie, "Proyecto 9 · etapa " + P.n + " de " + P.total, F.sm, C.mut);
+  pie.addSpacer();
+  texto(pie, P.txt, Font.boldRoundedSystemFont(11), P.col);
+}
+
+/* pantalla de bloqueo: por si algún día lo pones ahí */
+function bloqueo(w, R, fam){
+  const hs = fmt(hoy0());
+  const hoyN = R.tar.filter(T => T.f === hs).length, atr = R.tar.filter(T => T.f < hs).length;
+  const sig = siguientesClases(R)[0];
+  if(fam === "accessoryCircular"){
+    texto(w, String(hoyN), Font.boldRoundedSystemFont(22), Color.white()).centerAlignText();
+    texto(w, "hoy", Font.regularRoundedSystemFont(10), Color.white()).centerAlignText();
+    return;
+  }
+  const res = hoyN + " para hoy" + (atr ? " · " + atr + " atrasada" + (atr > 1 ? "s" : "") : "");
+  if(fam === "accessoryInline"){ texto(w, res + (sig ? " · " + sig.n + " " + cuandoClase(sig) : ""), Font.regularRoundedSystemFont(12), Color.white()); return; }
+  texto(w, res, Font.boldRoundedSystemFont(13), Color.white());
+  if(sig) texto(w, sig.n + " · " + cuandoClase(sig), Font.regularRoundedSystemFont(12), Color.white());
+  const pr = R.tar.find(T => T.f >= hs);
+  if(pr) texto(w, pr.t, Font.regularRoundedSystemFont(12), Color.white());
+}
+
+/* ---------- datos: de la nube, y si no hay internet, lo último guardado ---------- */
+function limpiaUrl(u){
+  u = (u || "").trim().replace(/\s+/g, "").replace(/\/+$/, "").replace(/\/rest(\/v1)?$/i, "").replace(/\/+$/, "");
+  if(u && !/^https?:\/\//i.test(u)) u = "https://" + u;
+  return u;
+}
+async function cargar(){
+  const fm = FileManager.local();
+  const ruta = fm.joinPath(fm.documentsDirectory(), "agenda-uni-widget.json");
+  const guardado = () => fm.fileExists(ruta) ? JSON.parse(fm.readString(ruta)) : null;
+  try{
+    const r = new Request(limpiaUrl(SUPABASE_URL) + "/rest/v1/escuela_sync?code=eq." + encodeURIComponent(CODIGO + "__widget") + "&select=data");
+    r.headers = { apikey: LLAVE, Authorization: "Bearer " + LLAVE };
+    r.timeoutInterval = 12;
+    const rows = await r.loadJSON();
+    if(Array.isArray(rows) && rows[0] && rows[0].data){
+      fm.writeString(ruta, JSON.stringify(rows[0].data));
+      return { R: rows[0].data };
+    }
+    if(Array.isArray(rows)) return { error: "Abre tu agenda una vez para que mande el resumen, y vuelve a intentar." };
+    return { error: "Supabase no aceptó los datos. Revisa la URL y la llave arriba del script." };
+  } catch(e){
+    const g = guardado();
+    if(g) return { R: g };
+    return { error: "Sin internet y todavía no hay nada guardado. Se llenará solo en cuanto haya señal." };
+  }
+}
+
+/* ---------- armar ---------- */
+const fam = config.widgetFamily || "large";
+const w = new ListWidget();
+w.url = URL_APP;
+w.refreshAfterDate = new Date(Date.now() + 15*60*1000);
+const esBloqueo = fam.indexOf("accessory") === 0;
+if(!esBloqueo){ w.backgroundColor = C.bg; w.setPadding(14, 14, 14, 14); }
+
+if(!SUPABASE_URL || !LLAVE || !CODIGO){
+  texto(w, "Falta poner tus datos arriba del script: la URL, la llave y tu código.", esBloqueo ? Font.regularRoundedSystemFont(12) : F.fila, esBloqueo ? Color.white() : C.txt, 4);
+} else {
+  const res = await cargar();
+  if(res.error) texto(w, res.error, esBloqueo ? Font.regularRoundedSystemFont(12) : F.fila, esBloqueo ? Color.white() : C.txt, 4);
+  else {
+    const R = res.R; R.tar = R.tar || [];
+    if(esBloqueo) bloqueo(w, R, fam);
+    else if(fam === "small") chico(w, R);
+    else if(fam === "medium") mediano(w, R);
+    else grande(w, R);
+  }
+}
+
+if(config.runsInWidget) Script.setWidget(w);
+else await w.presentLarge();
+Script.complete();

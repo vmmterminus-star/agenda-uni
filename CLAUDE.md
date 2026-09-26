@@ -17,3 +17,9 @@ Agenda de la universidad de Valen (CUAAD, arquitectura): materias, tareas, calif
 - Antes de subir cualquier cambio: abre la app en el navegador integrado, prueba el cambio (también en tamaño celular) y revisa la consola.
 - Enséñale el resultado. Haz commit y push a `main` solo cuando ella diga que sí. En ~1 minuto queda en línea.
 - El repo es público: nada de contraseñas ni datos personales aquí.
+
+## Widget de iPhone y avisos
+- Al sincronizar, `widgetResumen()` sube una segunda fila `<código>__widget` a `escuela_sync` (solo si cambió). La lectura normal filtra por código exacto, así que nunca se mezcla con los datos.
+- `widget.txt` es el script de Scriptable (tamaños chico, mediano y grande). Va sin llaves: Valen las escribe en el iPhone.
+- Los avisos de Pushover viven en Supabase (esquema `avisos`, revisión cada 15 min con pg_cron). Los SQL están en su carpeta ESCUELA, no en este repo.
+- Si cambias la forma de `widgetResumen()`, cambia también el script y el SQL.

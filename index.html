@@ -2017,7 +2017,7 @@ function modalBackup(){
   var h='<h3>Sincronizar y respaldar</h3>';
 
   h+='<div class="syncbox"><div class="ct">Sincronización en la nube</div>';
-  if(esLocal()) h+='<div class="empty" style="color:var(--dantx)">Estás abriendo el archivo directo del disco. La sincronización solo funciona en la dirección de Netlify.</div>';
+  if(esLocal()) h+='<div class="empty" style="color:var(--dantx)">Estás abriendo el archivo directo del disco. La sincronización solo funciona abriendo la app desde su dirección de internet: vmmterminus-star.github.io/agenda-uni</div>';
   h+='<div class="fld"><label>URL del proyecto Supabase</label><input id="cfgUrl" value="'+esc(CFG.url||SUPA_URL_DEF)+'" placeholder="https://xxxx.supabase.co" autocapitalize="off" spellcheck="false"></div>';
   h+='<div class="fld"><label>Llave anon (public)</label><input id="cfgKey" value="'+esc(CFG.key||SUPA_KEY_DEF)+'" placeholder="eyJhbGciOi…" autocapitalize="off" spellcheck="false"></div>';
   h+='<div class="fld"><label>Código secreto · el mismo en todos tus dispositivos</label><input id="cfgCode" value="'+esc(CFG.code||'')+'" placeholder="ej. tesis2026" autocapitalize="off" spellcheck="false"></div>';
@@ -2128,13 +2128,19 @@ function syncCiclo(forzar){
       var mio = payload();
       var iguales = remoto && JSON.stringify(remoto)===JSON.stringify(mio);
       if(cambio){ guardaLocal(); render(); }
-      if(iguales){ SYNC.corriendo=false; SYNC.ultimo=Date.now(); setSync('ok',''); return; }
+      /* segunda fila con el resumen para el widget y los avisos; solo se manda si cambió */
+      var W=''; try{ W=JSON.stringify(widgetResumen()); }catch(eW){ W=''; }
+      var ahoraISO=new Date().toISOString(), filas=[];
+      if(!iguales) filas.push({code:cfgCode(), data:mio, updated_at:ahoraISO});
+      if(W && W!==WLAST) filas.push({code:cfgCode()+'__widget', data:JSON.parse(W), updated_at:ahoraISO});
+      if(!filas.length){ SYNC.corriendo=false; SYNC.ultimo=Date.now(); setSync('ok',''); return; }
       return fetch(cfgUrl()+'/rest/v1/'+TABLA,{
         method:'POST',
         headers:Object.assign({}, heads(), {'Prefer':'resolution=merge-duplicates,return=minimal'}),
-        body:JSON.stringify({code:cfgCode(), data:mio, updated_at:new Date().toISOString()})
+        body:JSON.stringify(filas)
       }).then(function(r2){
         if(!r2.ok) throw new Error('HTTP '+r2.status);
+        if(W) WLAST=W;
         SYNC.corriendo=false; SYNC.ultimo=Date.now(); setSync('ok','');
       });
     })
@@ -2145,6 +2151,39 @@ function syncCiclo(forzar){
     .then(function(){
       if(SYNC.pendiente){ SYNC.pendiente=false; setTimeout(function(){ syncCiclo(); }, 800); }
     });
+}
+
+/* ============ resumen para el widget del iPhone y los avisos de Pushover ============
+   Va ya resuelto (nombres, colores, fechas) para que el widget y los avisos no
+   dependan de cómo está hecha la app por dentro. Las fechas relativas las
+   calcula cada quien al momento, así no se quedan viejas. */
+var WLAST='';
+function widgetResumen(){
+  var h0=hoy(), cla=[], i, d, s;
+  for(i=0;i<21;i++){
+    d=new Date(h0); d.setDate(d.getDate()+i); s=fmtD(d);
+    clasesDe(s).forEach(function(M){
+      if(falta(M.id,s)) return;   /* si ya planeaste faltar, no te la anuncia */
+      cla.push({d:s, n:M.nombre, a:M.aula||'', hi:M.hini||'', hf:M.hfin||'', c:M.c});
+    });
+  }
+  var tar=D.tar.filter(function(T){ return T.st!==2 && T.f; }).map(function(T){
+    var M=mat(T.m), o={i:T.id, t:T.t, m:M.nombre, c:M.c, f:T.f};
+    if(T.fpre) o.p=T.fpre;
+    if(T.hora) o.h=T.hora;
+    if(T.tipo) o.k=T.tipo;
+    if(T.et) o.e=T.et;
+    if(M.tesis) o.x=1;
+    return o;
+  });
+  tar.sort(function(a,b){ return a.f.localeCompare(b.f) || (a.h||'zz').localeCompare(b.h||'zz'); });
+  var fa=D.mat.filter(function(M){ return M.clase && M.dias && M.dias.length; }).map(function(M){
+    var F=faltasDe(M.id);
+    return {n:M.nombre, u:F.usadas, max:F.max, rest:F.rest};
+  });
+  return { v:1, gen:fmtD(h0), s1:fmtD(S1), app:location.href.split('?')[0].split('#')[0],
+           et:ETAPAS.map(function(E){ return {i:E.id, n:E.nombre, a:E.ini, b:E.fin}; }),
+           tar:tar.slice(0,120), cla:cla, fa:fa };
 }
 
 var pushT;
