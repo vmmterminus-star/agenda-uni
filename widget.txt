@@ -117,7 +117,7 @@ function chico(w, R){
   const atr  = R.tar.filter(T => T.f < hs).length;
   titulo(w, "Hoy");
   w.addSpacer(2);
-  texto(w, String(hoyN), F.big, C.txt);
+  texto(w, String(hoyN), Font.boldRoundedSystemFont(30), C.txt);
   let sub = hoyN === 1 ? "pendiente" : "pendientes";
   if(!hoyN) sub = "nada vence hoy";
   if(atr) sub += " · " + atr + (atr === 1 ? " atrasada" : " atrasadas");
@@ -213,30 +213,55 @@ function limpiaUrl(u){
 async function cargar(){
   const fm = FileManager.local();
   const ruta = fm.joinPath(fm.documentsDirectory(), "agenda-uni-widget.json");
-  const guardado = () => fm.fileExists(ruta) ? JSON.parse(fm.readString(ruta)) : null;
+  /* lo guardado lleva los datos y las dos horas; la versión vieja solo traía los datos */
+  const guardado = () => {
+    if(!fm.fileExists(ruta)) return null;
+    const g = JSON.parse(fm.readString(ruta));
+    return (g && g.data && g.leido) ? g : { data: g, at: null, leido: null };
+  };
   const base = limpiaUrl(SUPABASE_URL);
   if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(base))
     return { error: "La URL de arriba no parece de Supabase. Debe verse así: https://algo.supabase.co  ·  La tuya: " + (SUPABASE_URL || "(vacía)") };
   let txt;
   try{
-    const r = new Request(base + "/rest/v1/escuela_sync?code=eq." + encodeURIComponent(CODIGO.trim() + "__widget") + "&select=data");
+    const r = new Request(base + "/rest/v1/escuela_sync?code=eq." + encodeURIComponent(CODIGO.trim() + "__widget") + "&select=data,updated_at");
     r.headers = { apikey: LLAVE.trim(), Authorization: "Bearer " + LLAVE.trim() };
     r.timeoutInterval = 12;
     txt = await r.loadString();
   } catch(e){
     const g = guardado();
-    if(g) return { R: g };
+    if(g) return { R: g.data, at: g.at, leido: g.leido, sinRed: true };
     return { error: "No pude conectarme a Supabase y todavía no hay nada guardado. Detalle: " + (e && e.message ? e.message : e) };
   }
   let rows;
   try{ rows = JSON.parse(txt); }
   catch(e){ return { error: "Supabase respondió algo raro. Revisa la URL de arriba. Respuesta: " + String(txt).slice(0, 80) }; }
   if(Array.isArray(rows) && rows[0] && rows[0].data){
-    fm.writeString(ruta, JSON.stringify(rows[0].data));
-    return { R: rows[0].data };
+    const g = { data: rows[0].data, at: rows[0].updated_at || null, leido: Date.now() };
+    fm.writeString(ruta, JSON.stringify(g));
+    return { R: g.data, at: g.at, leido: g.leido };
   }
   if(Array.isArray(rows)) return { error: "Todavía no hay resumen con ese código. Revisa que el código sea igual al de tu agenda, abre la agenda y espera la pastilla verde." };
   return { error: "Supabase no aceptó la llave. Revisa la llave de arriba. Detalle: " + String(rows && (rows.message || rows.msg || rows.error) || "").slice(0, 80) };
+}
+
+/* ---------- la línea de abajo: cuándo leyó el widget y cuándo mandó cambios tu agenda ---------- */
+function haceCuanto(t){
+  const min = Math.floor((Date.now() - new Date(t).getTime()) / 60000);
+  if(min < 1) return "hace un momento";
+  if(min < 60) return "hace " + min + " min";
+  const h = Math.floor(min / 60);
+  if(h < 24) return "hace " + h + " h";
+  const d = Math.floor(h / 24);
+  return d === 1 ? "hace 1 día" : "hace " + d + " días";
+}
+function hhmm(t){ const d = new Date(t); return ("0"+d.getHours()).slice(-2) + ":" + ("0"+d.getMinutes()).slice(-2); }
+function lineaInfo(w, res, corto){
+  let s = res.sinRed ? "Sin señal · " : "";
+  s += res.leido ? "Leído " + hhmm(res.leido) : "Leído antes";
+  if(!corto && res.at) s += " · tu agenda mandó cambios " + haceCuanto(res.at);
+  w.addSpacer(3);
+  texto(w, s, Font.regularRoundedSystemFont(9), res.sinRed ? C.dantx : C.hint);
 }
 
 /* ---------- armar ---------- */
@@ -255,9 +280,9 @@ if(!SUPABASE_URL || !LLAVE || !CODIGO){
   else {
     const R = res.R; R.tar = R.tar || [];
     if(esBloqueo) bloqueo(w, R, fam);
-    else if(fam === "small") chico(w, R);
-    else if(fam === "medium") mediano(w, R);
-    else grande(w, R);
+    else if(fam === "small"){ chico(w, R); lineaInfo(w, res, true); }
+    else if(fam === "medium"){ mediano(w, R); lineaInfo(w, res, false); }
+    else { grande(w, R); lineaInfo(w, res, false); }
   }
 }
 
