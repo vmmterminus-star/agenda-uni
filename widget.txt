@@ -10,6 +10,15 @@ const CODIGO = "";         // tu código secreto, entre las comillas
 
 const URL_APP = "https://vmmterminus-star.github.io/agenda-uni/";
 
+/* ---------- letra: Outfit (instalada con iFont). Si el iPhone no la encuentra,
+   usa la redondeada del sistema. Para regresar a la redondeada, cambia true por false. ---------- */
+const USAR_OUTFIT = true;
+const OUTFIT = { regular:"Outfit-Regular", medium:"Outfit-Medium", semibold:"Outfit-SemiBold", bold:"Outfit-Bold" };
+function fuente(peso, tam){
+  if(USAR_OUTFIT){ try{ const f = new Font(OUTFIT[peso], tam); if(f) return f; }catch(e){} }
+  return Font[peso + "RoundedSystemFont"](tam);
+}
+
 /* ---------- colores de la agenda (claro / oscuro) ---------- */
 function dyn(a, b){ return Color.dynamic(new Color(a), new Color(b)); }
 const C = {
@@ -25,13 +34,13 @@ const C = {
   grn:   dyn("#5F8A7D", "#8DBBAE")
 };
 const F = {
-  tit:  Font.boldRoundedSystemFont(11),
-  big:  Font.boldRoundedSystemFont(34),
-  fila: Font.regularRoundedSystemFont(12),
-  fec:  Font.mediumRoundedSystemFont(11),
-  cls:  Font.semiboldRoundedSystemFont(13),
-  sm:   Font.regularRoundedSystemFont(11),
-  band: Font.boldRoundedSystemFont(9)
+  tit:  fuente("bold", 11),
+  big:  fuente("bold", 34),
+  fila: fuente("regular", 12),
+  fec:  fuente("medium", 11),
+  cls:  fuente("semibold", 13),
+  sm:   fuente("regular", 11),
+  band: fuente("bold", 9)
 };
 
 /* ---------- fechas: se calculan aquí, al momento ---------- */
@@ -109,7 +118,7 @@ const ROJO_SEM = "#8A4529", ROJO_URGE = "#8C3325";
 function cabecera(p, txt, urge){
   const hex = urge ? ROJO_URGE : ROJO_SEM;
   p.addSpacer(4);
-  texto(p, txt, Font.semiboldRoundedSystemFont(9), dyn(hex, "#E7A68C"));
+  texto(p, txt, fuente("semibold", 9), dyn(hex, "#E7A68C"));
   p.addSpacer(1);
   const dc = new DrawContext();
   dc.size = new Size(600, 2); dc.opaque = false; dc.respectScreenScale = true;
@@ -125,7 +134,7 @@ function chico(w, R){
   const atr  = R.tar.filter(T => T.f < hs).length;
   titulo(w, "Hoy");
   w.addSpacer(2);
-  texto(w, String(hoyN), Font.boldRoundedSystemFont(30), C.txt);
+  texto(w, String(hoyN), fuente("bold", 30), C.txt);
   let sub = hoyN === 1 ? "pendiente" : "pendientes";
   if(!hoyN) sub = "nada vence hoy";
   if(atr) sub += " · " + atr + (atr === 1 ? " atrasada" : " atrasadas");
@@ -217,7 +226,7 @@ function grande(w, R){
   const pie = w.addStack(); pie.layoutHorizontally();
   texto(pie, "Proyecto 9 · etapa " + P.n + " de " + P.total, F.sm, C.mut);
   pie.addSpacer();
-  texto(pie, P.txt, Font.boldRoundedSystemFont(11), P.col);
+  texto(pie, P.txt, fuente("bold", 11), P.col);
 }
 
 /* pantalla de bloqueo: por si algún día lo pones ahí */
@@ -226,16 +235,16 @@ function bloqueo(w, R, fam){
   const hoyN = R.tar.filter(T => T.f === hs).length, atr = R.tar.filter(T => T.f < hs).length;
   const sig = siguientesClases(R)[0];
   if(fam === "accessoryCircular"){
-    texto(w, String(hoyN), Font.boldRoundedSystemFont(22), Color.white()).centerAlignText();
-    texto(w, "hoy", Font.regularRoundedSystemFont(10), Color.white()).centerAlignText();
+    texto(w, String(hoyN), fuente("bold", 22), Color.white()).centerAlignText();
+    texto(w, "hoy", fuente("regular", 10), Color.white()).centerAlignText();
     return;
   }
   const res = hoyN + " para hoy" + (atr ? " · " + atr + " atrasada" + (atr > 1 ? "s" : "") : "");
-  if(fam === "accessoryInline"){ texto(w, res + (sig ? " · " + sig.n + " " + cuandoClase(sig) : ""), Font.regularRoundedSystemFont(12), Color.white()); return; }
-  texto(w, res, Font.boldRoundedSystemFont(13), Color.white());
-  if(sig) texto(w, sig.n + " · " + cuandoClase(sig), Font.regularRoundedSystemFont(12), Color.white());
+  if(fam === "accessoryInline"){ texto(w, res + (sig ? " · " + sig.n + " " + cuandoClase(sig) : ""), fuente("regular", 12), Color.white()); return; }
+  texto(w, res, fuente("bold", 13), Color.white());
+  if(sig) texto(w, sig.n + " · " + cuandoClase(sig), fuente("regular", 12), Color.white());
   const pr = R.tar.find(T => T.f >= hs);
-  if(pr) texto(w, pr.t, Font.regularRoundedSystemFont(12), Color.white());
+  if(pr) texto(w, pr.t, fuente("regular", 12), Color.white());
 }
 
 /* ---------- datos: de la nube, y si no hay internet, lo último guardado ---------- */
@@ -295,7 +304,7 @@ function lineaInfo(w, res, corto){
   s += res.leido ? "Leído " + hhmm(res.leido) : "Leído antes";
   if(!corto && res.at) s += " · tu agenda mandó cambios " + haceCuanto(res.at);
   w.addSpacer(3);
-  texto(w, s, Font.regularRoundedSystemFont(9), res.sinRed ? C.dantx : C.hint);
+  texto(w, s, fuente("regular", 9), res.sinRed ? C.dantx : C.hint);
 }
 
 /* ---------- armar ---------- */
@@ -307,10 +316,10 @@ const esBloqueo = fam.indexOf("accessory") === 0;
 if(!esBloqueo){ w.backgroundColor = C.bg; w.setPadding(14, 14, 14, 14); }
 
 if(!SUPABASE_URL || !LLAVE || !CODIGO){
-  texto(w, "Falta poner tus datos arriba del script: la URL, la llave y tu código.", esBloqueo ? Font.regularRoundedSystemFont(12) : F.fila, esBloqueo ? Color.white() : C.txt, 7);
+  texto(w, "Falta poner tus datos arriba del script: la URL, la llave y tu código.", esBloqueo ? fuente("regular", 12) : F.fila, esBloqueo ? Color.white() : C.txt, 7);
 } else {
   const res = await cargar();
-  if(res.error) texto(w, res.error, esBloqueo ? Font.regularRoundedSystemFont(12) : F.fila, esBloqueo ? Color.white() : C.txt, 7);
+  if(res.error) texto(w, res.error, esBloqueo ? fuente("regular", 12) : F.fila, esBloqueo ? Color.white() : C.txt, 7);
   else {
     const R = res.R; R.tar = R.tar || [];
     if(esBloqueo) bloqueo(w, R, fam);
