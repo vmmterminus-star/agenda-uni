@@ -214,22 +214,29 @@ async function cargar(){
   const fm = FileManager.local();
   const ruta = fm.joinPath(fm.documentsDirectory(), "agenda-uni-widget.json");
   const guardado = () => fm.fileExists(ruta) ? JSON.parse(fm.readString(ruta)) : null;
+  const base = limpiaUrl(SUPABASE_URL);
+  if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(base))
+    return { error: "La URL de arriba no parece de Supabase. Debe verse así: https://algo.supabase.co  ·  La tuya: " + (SUPABASE_URL || "(vacía)") };
+  let txt;
   try{
-    const r = new Request(limpiaUrl(SUPABASE_URL) + "/rest/v1/escuela_sync?code=eq." + encodeURIComponent(CODIGO + "__widget") + "&select=data");
-    r.headers = { apikey: LLAVE, Authorization: "Bearer " + LLAVE };
+    const r = new Request(base + "/rest/v1/escuela_sync?code=eq." + encodeURIComponent(CODIGO.trim() + "__widget") + "&select=data");
+    r.headers = { apikey: LLAVE.trim(), Authorization: "Bearer " + LLAVE.trim() };
     r.timeoutInterval = 12;
-    const rows = await r.loadJSON();
-    if(Array.isArray(rows) && rows[0] && rows[0].data){
-      fm.writeString(ruta, JSON.stringify(rows[0].data));
-      return { R: rows[0].data };
-    }
-    if(Array.isArray(rows)) return { error: "Abre tu agenda una vez para que mande el resumen, y vuelve a intentar." };
-    return { error: "Supabase no aceptó los datos. Revisa la URL y la llave arriba del script." };
+    txt = await r.loadString();
   } catch(e){
     const g = guardado();
     if(g) return { R: g };
-    return { error: "Sin internet y todavía no hay nada guardado. Se llenará solo en cuanto haya señal." };
+    return { error: "No pude conectarme a Supabase y todavía no hay nada guardado. Detalle: " + (e && e.message ? e.message : e) };
   }
+  let rows;
+  try{ rows = JSON.parse(txt); }
+  catch(e){ return { error: "Supabase respondió algo raro. Revisa la URL de arriba. Respuesta: " + String(txt).slice(0, 80) }; }
+  if(Array.isArray(rows) && rows[0] && rows[0].data){
+    fm.writeString(ruta, JSON.stringify(rows[0].data));
+    return { R: rows[0].data };
+  }
+  if(Array.isArray(rows)) return { error: "Todavía no hay resumen con ese código. Revisa que el código sea igual al de tu agenda, abre la agenda y espera la pastilla verde." };
+  return { error: "Supabase no aceptó la llave. Revisa la llave de arriba. Detalle: " + String(rows && (rows.message || rows.msg || rows.error) || "").slice(0, 80) };
 }
 
 /* ---------- armar ---------- */
@@ -241,10 +248,10 @@ const esBloqueo = fam.indexOf("accessory") === 0;
 if(!esBloqueo){ w.backgroundColor = C.bg; w.setPadding(14, 14, 14, 14); }
 
 if(!SUPABASE_URL || !LLAVE || !CODIGO){
-  texto(w, "Falta poner tus datos arriba del script: la URL, la llave y tu código.", esBloqueo ? Font.regularRoundedSystemFont(12) : F.fila, esBloqueo ? Color.white() : C.txt, 4);
+  texto(w, "Falta poner tus datos arriba del script: la URL, la llave y tu código.", esBloqueo ? Font.regularRoundedSystemFont(12) : F.fila, esBloqueo ? Color.white() : C.txt, 7);
 } else {
   const res = await cargar();
-  if(res.error) texto(w, res.error, esBloqueo ? Font.regularRoundedSystemFont(12) : F.fila, esBloqueo ? Color.white() : C.txt, 4);
+  if(res.error) texto(w, res.error, esBloqueo ? Font.regularRoundedSystemFont(12) : F.fila, esBloqueo ? Color.white() : C.txt, 7);
   else {
     const R = res.R; R.tar = R.tar || [];
     if(esBloqueo) bloqueo(w, R, fam);
