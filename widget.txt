@@ -104,10 +104,18 @@ function fila(p, T){
   texto(r, etiqueta(T), F.fec, nv === "atr" ? C.dantx : (nv === "hoy" ? C.ambtx : C.mut));
   p.addSpacer(3);
 }
-function banda(p, txt){
+/* encabezado de semana: letra chica y una línea del color de los encabezados de tu agenda */
+const ROJO_SEM = "#8A4529", ROJO_URGE = "#8C3325";
+function cabecera(p, txt, urge){
+  const hex = urge ? ROJO_URGE : ROJO_SEM;
+  p.addSpacer(4);
+  texto(p, txt, Font.semiboldRoundedSystemFont(9), dyn(hex, "#E7A68C"));
+  p.addSpacer(1);
+  const dc = new DrawContext();
+  dc.size = new Size(600, 2); dc.opaque = false; dc.respectScreenScale = true;
+  dc.setFillColor(new Color(hex)); dc.fillRect(new Rect(0, 0, 600, 2));
+  const img = p.addImage(dc.getImage()); img.resizable = true;
   p.addSpacer(3);
-  texto(p, txt.toUpperCase(), F.band, C.hint);
-  p.addSpacer(2);
 }
 
 /* ---------- los tres tamaños ---------- */
@@ -162,21 +170,47 @@ function grande(w, R){
   }
   w.addSpacer(4);
 
+  /* mismos grupos que el apartado Tareas de tu Inicio */
   const dom = new Date(h); dom.setDate(h.getDate() + (7 - h.getDay()) % 7);
-  const domS = fmt(dom);
-  const grupos = [
-    ["Atrasado y hoy", R.tar.filter(T => T.f <= hs)],
-    ["Esta semana",    R.tar.filter(T => T.f > hs && T.f <= domS)],
-    ["Lo que viene",   R.tar.filter(T => T.f > domS)]
-  ];
-  let cupo = 7;
-  if(!R.tar.length){ w.addSpacer(8); texto(w, "Nada pendiente. Vas al corriente.", F.fila, C.mut); }
-  grupos.forEach(([nom, ts]) => {
-    if(!ts.length || cupo <= 0) return;
-    banda(w, nom);
-    ts.slice(0, cupo).forEach(T => fila(w, T));
-    cupo -= Math.min(cupo, ts.length);
+  const domS = fmt(dom), s1 = pd(R.s1);
+  const lunesDe = d => { const x = new Date(d); x.setDate(x.getDate() - ((x.getDay()+6) % 7)); return x; };
+  const semDe = f => { const n = Math.round((lunesDe(pd(f)) - s1) / (7*MS)) + 1; return (n >= 1 && n <= 17) ? n : null; };
+  const semHoy = Math.max(1, Math.min(17, Math.round((lunesDe(h) - s1) / (7*MS)) + 1));
+  const rango = n => {
+    const a = new Date(s1); a.setDate(a.getDate() + (n-1)*7);
+    const b = new Date(a); b.setDate(b.getDate() + 6);
+    return a.getDate() + (a.getMonth() !== b.getMonth() ? " " + MESC[a.getMonth()] : "") + "–" + b.getDate() + " " + MESC[b.getMonth()];
+  };
+  const grupoDe = T => {
+    if(T.f < hs)  return { k:"00", t:"Atrasado", urge:true };
+    if(T.f === hs) return { k:"01", t:"Hoy", urge:true };
+    if(T.f <= domS) return { k:"02", t:"Resto de esta semana" };
+    const sn = semDe(T.f);
+    if(!sn) return { k:"yy", t:"Después del semestre" };
+    return { k:"s" + ("0"+sn).slice(-2), t:(sn === semHoy+1 ? "Próxima semana · S" + sn : "Semana " + sn) + " · " + rango(sn) };
+  };
+  const grupos = [];
+  R.tar.forEach(T => {
+    const G = grupoDe(T);
+    let g = grupos.find(x => x.k === G.k);
+    if(!g){ g = Object.assign({ ts:[] }, G); grupos.push(g); }
+    g.ts.push(T);
   });
+  grupos.sort((a, b) => a.k < b.k ? -1 : 1);
+
+  /* caben ~7 renglones; cada encabezado ocupa casi lo mismo que media tarea */
+  let usado = 0;
+  const TOPE = 8.5;
+  if(!R.tar.length){ w.addSpacer(8); texto(w, "Nada pendiente. Vas al corriente.", F.fila, C.mut); }
+  for(const g of grupos){
+    if(usado + 0.6 + 1 > TOPE) break;
+    cabecera(w, g.t, g.urge);
+    usado += 0.6;
+    for(const T of g.ts){
+      if(usado + 1 > TOPE) break;
+      fila(w, T); usado += 1;
+    }
+  }
   w.addSpacer();
 
   const P = rutaP9(R);
