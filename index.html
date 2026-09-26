@@ -105,6 +105,16 @@ textarea{resize:vertical;min-height:60px}
 .t .sub .tim{font-size:10px;font-weight:500;white-space:nowrap}
 .t .sub .dsc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .t.hecho .sub{opacity:.45}
+/* no se hizo: rayado a 45° = anulado, igual que las clases canceladas */
+.t.nh{background:repeating-linear-gradient(45deg,#FBF9F5,#FBF9F5 5px,#F1ECE4 5px,#F1ECE4 10px)}
+.t.nh .nm{text-decoration:line-through;color:var(--hint)}
+.t.nh .sub,.t.nh .lb,.t.nh .dt{opacity:.55}
+.t .st.nohe{border-style:dashed;background:transparent}
+.t .pq{display:block;font-size:10.5px;color:var(--mut);font-style:italic;margin-top:2px;white-space:normal}
+.wkh.nh{background:#EFEAE2;cursor:pointer}
+.wkh.nh span:first-child,.wkh.nh .wkn{color:var(--mut)}
+.chev{display:inline-block;width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);margin-left:8px;vertical-align:1px}
+.chev.abierto{transform:rotate(45deg);vertical-align:3px}
 .t .lb{font-size:10px;padding:2px 8px;border-radius:10px;white-space:nowrap;flex:none}
 .wkh{display:flex;align-items:baseline;gap:8px;margin:14px -14px 4px;padding:5px 14px;background:var(--accbg);border-top:1px solid var(--line)}
 .wkh:first-of-type{margin-top:4px}
@@ -343,6 +353,11 @@ details.more[open] summary:before{content:'▾ '}
 .reco .ln{flex:1;height:2px;background:var(--line)}
 .reco .ln.on{background:var(--acc)}
 .recolb{display:flex;justify-content:space-between;font-size:9.5px;color:var(--hint);margin:5px 2px 0}
+.reco .sep{width:1px;height:20px;background:var(--line2);margin:0 14px;flex:none}
+.reco .nd.x{border-style:dashed}
+.reco .nd.x.on{background:repeating-linear-gradient(45deg,#fff,#fff 2px,var(--hint) 2px,var(--hint) 4px);border-color:var(--hint);border-style:solid}
+.recolb .g{flex:1;display:flex;justify-content:space-between;margin-right:18px}
+.recolb .x{flex:none;margin-right:-10px}
 .paso{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12.5px}
 .paso .pck{width:15px;height:15px;border:1.4px solid var(--line2);border-radius:4px;background:#fff;flex:none;padding:0;cursor:pointer}
 .paso .pck.on{background:var(--grn);border-color:var(--grn)}
@@ -837,6 +852,7 @@ function matPorNombre(re){
 function mat(id){ for(var i=0;i<D.mat.length;i++) if(D.mat[i].id===id) return D.mat[i]; return {id:id,nombre:'—',c:'#A79E92',bg:'#EFEAE2',fg:'#5A5348'}; }
 function tipo(id){ for(var i=0;i<TIPOS.length;i++) if(TIPOS[i].id===id) return TIPOS[i]; return TIPOS[0]; }
 function rubro(id){ for(var i=0;i<RUBRICA.length;i++){ var r=RUBRICA[i].rubros; for(var j=0;j<r.length;j++) if(r[j].id===id) return {r:r[j],c:RUBRICA[i]}; } return null; }
+function cerrada(T){ return T.st===2 || T.st===3; }   /* entregada o "no se hizo" */
 function tarea(id){ for(var i=0;i<D.tar.length;i++) if(D.tar[i].id===id) return D.tar[i]; return null; }
 
 var toastT;
@@ -899,10 +915,10 @@ function estadoEtapas(){
   for(var i=0;i<ETAPAS.length;i++){
     var E=ETAPAS[i];
     var ts=D.tar.filter(function(T){ return T.et===E.id; });
-    var hechas=ts.filter(function(T){ return T.st===2; }).length;
+    var hechas=ts.filter(function(T){ return cerrada(T); }).length;
     var atrasoMax=0;
     for(var j=0;j<ts.length;j++){
-      var T=ts[j]; if(T.st===2) continue;
+      var T=ts[j]; if(cerrada(T)) continue;
       var dd=difDias(T.f);
       if(dd!=null && dd<0){ var sem=Math.floor(-dd/7); if(sem>atrasoMax) atrasoMax=sem; }
     }
@@ -940,10 +956,25 @@ function render(){
   for(var i=0;i<tb.length;i++) tb[i].classList.toggle('on', tb[i].getAttribute('data-v')===VIEW);
 }
 
+/* renglón de una tarea que no se hizo: rayado = anulado; el cuadrito la regresa a pendientes */
+function filaNH(T, ocultaMateria){
+  var M=mat(T.m), TP=tipo(T.tipo);
+  return '<div class="t nh">'
+    +'<button class="st nohe" data-st="'+T.id+'" aria-label="Regresar a pendientes"></button>'
+    +'<span class="tt" data-ed="'+T.id+'"><span class="nm">'+esc(T.t)+'</span>'
+    +'<span class="sub"><span class="tipo" style="background:'+TP.bg+';color:'+TP.fg+'">'+TP.n+'</span></span>'
+    +(T.pq?'<span class="pq">'+esc(T.pq)+'</span>':'')+'</span>'
+    +(ocultaMateria?'':'<span class="lb" style="background:'+M.bg+';color:'+M.fg+'">'+esc(M.nombre)+'</span>')
+    +'<span class="dt">'+corta(T.f)+'</span>'
+    +'</div>';
+}
+function nhAbierto(){ try{ return localStorage.getItem(K+'ui_nh')==='1'; }catch(e){ return false; } }
+
 function filaT(T, ocultaMateria, diaCtx){
+  if(T.st===3) return filaNH(T, ocultaMateria);
   var M=mat(T.m), dd=difDias(T.f), cls='', txt=corta(T.f);
   /* en camino: el día que se mira está entre la fecha preferida y el límite */
-  var enCamino = !!(diaCtx && T.fpre && T.st!==2 && diaCtx>=T.fpre && diaCtx<T.f);
+  var enCamino = !!(diaCtx && T.fpre && !cerrada(T) && diaCtx>=T.fpre && diaCtx<T.f);
   if(enCamino){
     var a=parseD(T.f), b=parseD(diaCtx), faltan=Math.round((a-b)/MS);
     var U=urgencia(T.f, diaCtx), TMc=tiempo(T.dur);
@@ -961,13 +992,13 @@ function filaT(T, ocultaMateria, diaCtx){
       +'</div>';
   }
   var hr = T.hora ? '<small class="hra">'+esc(T.hora)+'</small>' : '';
-  if(T.st!==2 && dd!=null){
+  if(!cerrada(T) && dd!=null){
     if(dd<0){ cls='late'; txt = -dd===1?'ayer':(-dd)+' días tarde'; }
     else if(dd===0){ cls='soon'; txt='hoy'; }
     else if(dd===1){ cls='soon'; txt='mañana'; }
     else if(dd<=6){ cls='soon'; txt='en '+dd+' días'; }
   }
-  if(T.fpre && T.st!==2){
+  if(T.fpre && !cerrada(T)){
     var dp=difDias(T.fpre), pt=corta(T.fpre);
     if(dp===0) pt='hoy'; else if(dp===1) pt='mañana'; else if(dp<0) pt='ya pasó';
     txt = '<span class="pre">'+pt+'</span> → <b>'+txt+'</b>';
@@ -981,10 +1012,10 @@ function filaT(T, ocultaMateria, diaCtx){
   var sub = '<span class="tipo" style="background:'+TP.bg+';color:'+TP.fg+'">'+TP.n+'</span>';
   if(TM) sub += '<span class="tim">'+TM.n+'</span>';
   if(np) sub += '<span class="tim" style="color:var(--grntx)">'+nh+'/'+np+' pasos</span>';
-  if(T.st!==2 && insumoAtrasado(T)) sub += '<span class="tim" style="color:var(--dan)">insumo atrasado</span>';
+  if(!cerrada(T) && insumoAtrasado(T)) sub += '<span class="tim" style="color:var(--dan)">insumo atrasado</span>';
   if(T.nota) sub += '<span class="dsc">'+esc(String(T.nota).replace(/\s+/g,' ').slice(0,46))+(String(T.nota).length>46?'…':'')+'</span>';
   return '<div class="t '+(T.st===2?'hecho':'')+'"'+tint+'>'
-    + (TM && T.st!==2 ? '<span class="fdur" style="height:'+TM.alto+'px;background:'+TM.c+'"></span>' : '')
+    + (TM && !cerrada(T) ? '<span class="fdur" style="height:'+TM.alto+'px;background:'+TM.c+'"></span>' : '')
     +'<button class="st '+stc+'" data-st="'+T.id+'" aria-label="Cambiar estado">'+sti+'</button>'
     +'<span class="tt" data-ed="'+T.id+'"><span class="nm">'+esc(T.t)+'</span><span class="sub">'+sub+'</span></span>'
     + (ocultaMateria?'':'<span class="lb" style="background:'+M.bg+';color:'+M.fg+'">'+esc(M.nombre)+'</span>')
@@ -1035,7 +1066,7 @@ function minutos(h){ if(!h) return null; var p=h.split(':'); return (+p[0])*60+(
 function insumoAtrasado(T){
   for(var i=0;i<D.tar.length;i++){
     var X=D.tar[i];
-    if(X.alim!==T.id || X.st===2) continue;
+    if(X.alim!==T.id || cerrada(X)) continue;
     var dd=difDias(X.f);
     if(dd!=null && dd<0) return X;
   }
@@ -1184,8 +1215,8 @@ function vHorario(){
 
 function vInicio(){
   var h='';
-  var atrasadas = D.tar.filter(function(T){ var dd=difDias(T.f); return T.st!==2 && dd!=null && dd<0; });
-  var hoyT = D.tar.filter(function(T){ return T.st!==2 && difDias(T.f)===0; });
+  var atrasadas = D.tar.filter(function(T){ var dd=difDias(T.f); return !cerrada(T) && dd!=null && dd<0; });
+  var hoyT = D.tar.filter(function(T){ return !cerrada(T) && difDias(T.f)===0; });
   var etp = estadoEtapas();
   var alertaRuta = etp.filter(function(x){ return x.estado==='late'; });
 
@@ -1194,7 +1225,7 @@ function vInicio(){
   h+='<div class="two"><div>';
 
   /* ---- un solo apartado de tareas, con sus periodos visibles ---- */
-  var pend = D.tar.filter(function(T){ return T.st!==2; });
+  var pend = D.tar.filter(function(T){ return !cerrada(T); });
   pend.sort(function(a,b){
     return (a.f||'zzzz').localeCompare(b.f||'zzzz') || (a.hora||'zz').localeCompare(b.hora||'zz');
   });
@@ -1233,6 +1264,15 @@ function vInicio(){
       for(var w2=0; w2<lista.length; w2++) h+=filaT(lista[w2]);
     }
   }
+  /* hasta abajo: las que no se hicieron, plegables */
+  var noHechas = D.tar.filter(function(T){ return T.st===3; });
+  if(noHechas.length){
+    noHechas.sort(function(a,b){ return (b.f||'').localeCompare(a.f||''); });
+    var nhA = nhAbierto();
+    h+='<div class="wkh nh" data-nhtog="1"><span>No se hicieron<i class="chev'+(nhA?' abierto':'')+'"></i></span>'
+      +'<span class="wkn">'+noHechas.length+'</span></div>';
+    if(nhA) for(var nh=0; nh<noHechas.length; nh++) h+=filaNH(noHechas[nh]);
+  }
   h+='<button class="add" data-new="1">+ Nueva tarea</button></div>';
 
   h+='</div><div>';
@@ -1242,7 +1282,7 @@ function vInicio(){
   h+='<div class="box"><span class="bh b">Carga por materia</span>';
   var totalPend=0;
   var cargas=matsOrd().map(function(M){
-    var ts=D.tar.filter(function(T){ return T.m===M.id && T.st!==2; });
+    var ts=D.tar.filter(function(T){ return T.m===M.id && !cerrada(T); });
     var atr=ts.filter(function(T){ var dd2=difDias(T.f); return dd2!=null && dd2<0; }).length;
     var hrs=0; for(var q2=0;q2<ts.length;q2++){ var tm2=tiempo(ts[q2].dur); if(tm2) hrs+=tm2.h; }
     var hechas=D.tar.filter(function(T){ return T.m===M.id && T.st===2; }).length;
@@ -1321,7 +1361,7 @@ function vCal(){
     }
     var ts = D.tar.filter(function(T){ return T.f===s && !FILTRO[T.m]; });
     var camino = D.tar.filter(function(T){
-      return T.fpre && T.st!==2 && !FILTRO[T.m] && s>=T.fpre && s<T.f;
+      return T.fpre && !cerrada(T) && !FILTRO[T.m] && s>=T.fpre && s<T.f;
     });
     var cls = clasesDe(s).filter(function(M){ return !FILTRO[M.id]; });
     h+='<div class="cell '+(out?'out':'')+' '+(s===hoyS?'hoy':'')+' '+(ASUETOS[s]?'asueto':'')+'" data-dia="'+s+'">'
@@ -1338,8 +1378,8 @@ function vCal(){
     }
     for(var j=0;j<ts.length && j<3;j++){
       var M2=mat(ts[j].m);
-      var lim = ts[j].fpre && ts[j].st!==2;
-      h+='<div class="tk '+(ts[j].st===2?'hecho':'')+'" style="background:'+M2.bg+';color:'+M2.fg+(lim?';border-left:3px solid var(--dan);border-radius:0 4px 4px 0':'')+'">'+(ts[j].hora?'<b>'+esc(ts[j].hora)+'</b> ':'')+esc(ts[j].t)+'</div>';
+      var lim = ts[j].fpre && !cerrada(ts[j]);
+      h+='<div class="tk '+(cerrada(ts[j])?'hecho':'')+'" style="background:'+M2.bg+';color:'+M2.fg+(lim?';border-left:3px solid var(--dan);border-radius:0 4px 4px 0':'')+'">'+(ts[j].hora?'<b>'+esc(ts[j].hora)+'</b> ':'')+esc(ts[j].t)+'</div>';
     }
     if(ts.length>3) h+='<div class="tk" style="background:transparent;color:var(--hint)">+'+(ts.length-3)+' más</div>';
     h+='</div>';
@@ -1562,7 +1602,7 @@ function vClases(){
   h+='<div class="clsgrid">';
   for(var i=0;i<clases.length;i++){
     var M=clases[i], fu=fuentesDe(M);
-    var pend=D.tar.filter(function(T){ return fu.indexOf(T.m)>=0 && T.st!==2; });
+    var pend=D.tar.filter(function(T){ return fu.indexOf(T.m)>=0 && !cerrada(T); });
     pend.sort(function(a,b){ return (a.f||'zz').localeCompare(b.f||'zz'); });
     var prox=pend[0];
     var L=ligasClassroom(M);
@@ -1611,7 +1651,7 @@ function vClases(){
     +'<div id="bloques">';
   for(var b=0;b<lista.length;b++){
     var B=lista[b];
-    var np=D.tar.filter(function(T){ return T.m===B.id && T.st!==2; }).length;
+    var np=D.tar.filter(function(T){ return T.m===B.id && !cerrada(T); }).length;
     var extra = (B.extra&&B.extra.length) ? ' · trae '+B.extra.length+' más' : '';
     h+='<div class="blk" data-blk="'+B.id+'">'
       +'<span class="grip" data-grip="'+B.id+'" aria-label="Mover">⠿</span>'
@@ -1720,7 +1760,7 @@ function modalTarea(id, fechaDef, matDef){
 
   /* ---- detalles ---- */
   var TP=tipo(T.tipo), TM=tiempo(T.dur);
-  var EST=['Por hacer','Haciendo','Entregado'];
+  var EST=['Por hacer','Haciendo','Entregado','No se hizo'];
   h+='<div class="det'+(nueva?'':' cerrado')+'" id="detBox">';
   h+='<div class="detsum" id="detSum"><span class="ar">'+(nueva?'▾':'▸')+'</span><span class="lb2">Detalles</span>'
     +'<span class="vals">'
@@ -1750,12 +1790,17 @@ function modalTarea(id, fechaDef, matDef){
   h+='</div>';
 
   h+='<div class="lbl" style="margin-top:14px">Estado</div>';
-  h+='<div class="reco" id="segEst">';
+  var stv=T.st||0;
+  h+='<div class="reco" id="segEst" data-v="'+stv+'">';
   for(var e2=0;e2<3;e2++){
-    if(e2>0) h+='<span class="ln'+(T.st>=e2?' on':'')+'"></span>';
-    h+='<button class="nd'+(T.st>=e2?' on':'')+'" data-s="'+e2+'" aria-label="'+EST[e2]+'"></button>';
+    if(e2>0) h+='<span class="ln'+(stv<3&&stv>=e2?' on':'')+'"></span>';
+    h+='<button class="nd'+(stv<3&&stv>=e2?' on':'')+'" data-s="'+e2+'" aria-label="'+EST[e2]+'"></button>';
   }
-  h+='</div><div class="recolb"><span>Por hacer</span><span>Haciendo</span><span>Entregado</span></div>';
+  /* "no se hizo" va aparte del recorrido: no es un paso más, es otro final */
+  h+='<span class="sep"></span><button class="nd x'+(stv===3?' on':'')+'" data-s="3" aria-label="'+EST[3]+'"></button>';
+  h+='</div><div class="recolb"><span class="g"><span>Por hacer</span><span>Haciendo</span><span>Entregado</span></span><span class="x">No se hizo</span></div>';
+  h+='<div class="fld" id="pqBox" style="margin-top:10px'+(stv===3?'':';display:none')+'"><label>¿Por qué no se hizo? · opcional</label>'
+    +'<input id="fPq" value="'+esc(T.pq||'')+'" placeholder="ej. el profe la quitó"></div>';
 
   h+='</div></div>';
 
@@ -1918,9 +1963,9 @@ function modalDia(s){
   var d=parseD(s); if(!d) return;
   var wn=semanaDeFecha(s);
   var ts=D.tar.filter(function(T){ return T.f===s; });
-  var camino=D.tar.filter(function(T){ return T.fpre && T.st!==2 && s>=T.fpre && s<T.f; });
+  var camino=D.tar.filter(function(T){ return T.fpre && !cerrada(T) && s>=T.fpre && s<T.f; });
   var cls=clasesDe(s);
-  var pend=ts.filter(function(T){ return T.st!==2; }).concat(camino);
+  var pend=ts.filter(function(T){ return !cerrada(T); }).concat(camino);
   var hrs=0; for(var q=0;q<pend.length;q++){ var tm=tiempo(pend[q].dur); if(tm) hrs+=tm.h; }
 
   var h='<div class="diahd"><b>'+DIAS_L[d.getDay()].charAt(0).toUpperCase()+DIAS_L[d.getDay()].slice(1)+' '+d.getDate()+' de '+MESES[d.getMonth()]+'</b>'
@@ -2025,6 +2070,12 @@ function modalBackup(){
   h+='<div class="acts" style="border:none;padding-top:9px;margin-top:6px"><button data-sync="1">Sincronizar ahora</button><button data-sql="1">Ver el SQL de la tabla</button></div>';
   h+='</div>';
 
+  h+='<div class="syncbox" style="margin-top:14px"><div class="ct">Widget del iPhone</div>'
+    +'<div class="empty">Copia el script y pégalo en Scriptable, en un script nuevo o encima del que ya tienes. '
+    +(syncListo()?'Ya va con tu URL, tu llave y tu código: no hay que llenar nada.':'Cuando llenes la sincronización de arriba, se copiará ya con tus datos.')+'</div>'
+    +'<div class="acts" style="border:none;padding-top:9px;margin-top:6px"><button data-copyw="1">Copiar script del widget</button></div>'
+    +'</div>';
+
   if(D.pap.length){
     h+='<div class="fld" style="margin-top:14px"><label>Papelera · se vacía sola a los '+PAPELERA_DIAS+' días</label>';
     for(var p=0;p<D.pap.length;p++){
@@ -2042,6 +2093,41 @@ function modalBackup(){
     +'<div class="empty">Fusionar une lo pegado con lo que ya tienes. Reemplazar borra lo de aquí.</div>';
   abrir(h);
   syncUI();
+  cargaWidgetTxt();
+}
+
+/* el script de Scriptable vive en widget.txt, junto a esta página.
+   Se baja al abrir Respaldo para que al tocar "Copiar" ya esté listo
+   (el iPhone solo deja copiar si pasa justo en el toque). */
+var WTXT='';
+function cargaWidgetTxt(){
+  if(WTXT || esLocal()) return;
+  fetch('widget.txt',{cache:'no-store'})
+    .then(function(r){ return r.ok ? r.text() : ''; })
+    .then(function(s){ WTXT=s||''; })
+    .catch(function(){});
+}
+function copiaWidget(){
+  if(esLocal()){ toast('Solo funciona desde la página de internet'); return; }
+  if(!WTXT){ toast('Un segundo, sigue cargando. Vuelve a tocar.'); cargaWidgetTxt(); return; }
+  var s=WTXT;
+  if(syncListo()){
+    s=s.replace('const SUPABASE_URL = "";', 'const SUPABASE_URL = '+JSON.stringify(cfgUrl())+';')
+       .replace('const LLAVE = "";', 'const LLAVE = '+JSON.stringify(cfgKey())+';')
+       .replace('const CODIGO = "";', 'const CODIGO = '+JSON.stringify(cfgCode())+';');
+  }
+  var listo=function(){ toast('Copiado. Pégalo en Scriptable'); };
+  var aMano=function(){
+    var ta=document.createElement('textarea');
+    ta.value=s; ta.setAttribute('readonly','');
+    ta.style.cssText='position:fixed;top:0;left:0;width:1px;height:1px;opacity:0';
+    document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, s.length);
+    var ok=false; try{ ok=document.execCommand('copy'); }catch(e){}
+    document.body.removeChild(ta);
+    if(ok) listo(); else toast('No se pudo copiar');
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(s).then(listo, aMano);
+  else aMano();
 }
 
 function modalSQL(){
@@ -2167,7 +2253,7 @@ function widgetResumen(){
       cla.push({d:s, n:M.nombre, a:M.aula||'', hi:M.hini||'', hf:M.hfin||'', c:M.c});
     });
   }
-  var tar=D.tar.filter(function(T){ return T.st!==2 && T.f; }).map(function(T){
+  var tar=D.tar.filter(function(T){ return !cerrada(T) && T.f; }).map(function(T){
     var M=mat(T.m), o={i:T.id, t:T.t, m:M.nombre, c:M.c, f:T.f};
     if(T.fpre) o.p=T.fpre;
     if(T.hora) o.h=T.hora;
@@ -2217,7 +2303,8 @@ document.addEventListener('click', function(e){
   t=el.closest('[data-st]'); if(t){
     var T=tarea(t.getAttribute('data-st'));
     if(T){
-      T.st=(T.st+1)%3; stamp(T); save(); render();
+      if(T.st===3){ T.st=0; T.pq=''; } else T.st=(T.st+1)%3;
+      stamp(T); save(); render();
       var mdEl=document.getElementById('md'), dOpen=mdEl?mdEl.getAttribute('data-diaopen'):null;
       if(dOpen && document.getElementById('ov').classList.contains('on')) modalDia(dOpen);
       if(T.st===2&&T.comp&&(T.cal==null||T.cal==='')) toast('Entregado · falta su calificación');
@@ -2325,11 +2412,14 @@ document.addEventListener('click', function(e){
   }
   t=el.closest('#segEst button'); if(t){
     var sv=+t.getAttribute('data-s'), cont=t.parentNode;
+    cont.setAttribute('data-v', sv);
     var nds=cont.querySelectorAll('.nd'), lns=cont.querySelectorAll('.ln');
-    for(var n2=0;n2<nds.length;n2++) nds[n2].classList.toggle('on', n2<=sv);
-    for(var l2=0;l2<lns.length;l2++) lns[l2].classList.toggle('on', (l2+1)<=sv);
+    for(var n2=0;n2<nds.length;n2++) nds[n2].classList.toggle('on', sv===3 ? n2===3 : n2<=sv);
+    for(var l2=0;l2<lns.length;l2++) lns[l2].classList.toggle('on', sv<3 && (l2+1)<=sv);
     var ve=document.getElementById('vEst');
-    if(ve) ve.textContent=['Por hacer','Haciendo','Entregado'][sv];
+    if(ve) ve.textContent=['Por hacer','Haciendo','Entregado','No se hizo'][sv];
+    var pqb=document.getElementById('pqBox');
+    if(pqb) pqb.style.display = sv===3 ? '' : 'none';
     return;
   }
   t=el.closest('[data-pok]'); if(t){
@@ -2352,7 +2442,8 @@ document.addEventListener('click', function(e){
     if(!txt){ toast('Ponle nombre a la tarea'); return; }
     var tipoSel = document.querySelector('#segTipo button.on');
     var durSel  = document.querySelector('#regla .rmk.on');
-    var nds     = document.querySelectorAll('#segEst .nd.on');
+    var segE    = document.getElementById('segEst');
+    var stSel   = segE ? +(segE.getAttribute('data-v')||0) : 0;
     var pend    = document.getElementById('pNuevo');
     if(pend && pend.value.trim()){ PASOS.push({t:pend.value.trim(), ok:false}); }
     var fl = document.getElementById('fF').value;
@@ -2365,7 +2456,8 @@ document.addEventListener('click', function(e){
       hora: (document.getElementById('fH')||{value:''}).value,
       m: document.getElementById('fM').value,
       tipo: tipoSel?tipoSel.getAttribute('data-t'):'tarea',
-      st: nds.length?nds.length-1:0,
+      st: stSel,
+      pq: stSel===3 ? (document.getElementById('fPq')||{value:''}).value.trim() : '',
       dur: durSel?+durSel.getAttribute('data-d'):0,
       et: document.getElementById('fE').value,
       comp: document.getElementById('fC').value,
@@ -2464,6 +2556,11 @@ document.addEventListener('click', function(e){
 
   if(el.id==='btnBackup'){ modalBackup(); return; }
   t=el.closest('[data-backup]'); if(t){ modalBackup(); return; }
+  t=el.closest('[data-nhtog]'); if(t){
+    try{ localStorage.setItem(K+'ui_nh', nhAbierto()?'0':'1'); }catch(e3){}
+    render(); return;
+  }
+  t=el.closest('[data-copyw]'); if(t){ copiaWidget(); return; }
   t=el.closest('[data-copy]'); if(t){
     var ta=document.getElementById('bkOut'); ta.select();
     try{ document.execCommand('copy'); toast('Copiado'); }catch(err){ toast('Selecciona y copia a mano'); }
@@ -2526,7 +2623,7 @@ document.addEventListener('change', function(e){
     save(); render(); return;
   }
   if((id=el.getAttribute('data-tcal'))){
-    var T=tarea(id); if(T){ T.cal = el.value.trim()===''?null:+el.value; if(T.cal!=null && T.st!==2) T.st=2; stamp(T); save(); render(); }
+    var T=tarea(id); if(T){ T.cal = el.value.trim()===''?null:+el.value; if(T.cal!=null && !cerrada(T)) T.st=2; stamp(T); save(); render(); }
     return;
   }
   if(el.id==='cfgUrl'||el.id==='cfgKey'||el.id==='cfgCode'){
