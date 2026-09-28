@@ -113,6 +113,37 @@ textarea{resize:vertical;min-height:60px}
 .t .pq{display:block;font-size:10.5px;color:var(--mut);font-style:italic;margin-top:2px;white-space:normal}
 .wkh.nh{background:#EFEAE2;cursor:pointer}
 .wkh.nh span:first-child,.wkh.nh .wkn{color:var(--mut)}
+/* tablero por materia y semana */
+.tbchips{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px}
+.tbchip{font-size:11.5px;padding:4px 11px;border-radius:14px;border:1px solid var(--line2);background:#fff;color:var(--hint);font-family:inherit}
+.tbchip.on{border-color:transparent}
+.tbpas{display:block;width:100%;text-align:left;font-family:inherit;font-size:11.5px;color:var(--mut);background:#EFEAE2;border:none;border-radius:8px;padding:7px 10px;margin-bottom:8px}
+.tbpas b{font-weight:600;color:var(--dantx)}
+.tbgrid{--wk:40px;display:grid;grid-template-columns:var(--wk) repeat(var(--n),minmax(0,1fr));gap:4px;align-items:stretch}
+.tbhd{font-size:11px;font-weight:600;padding:6px 4px;border-radius:7px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;position:sticky;top:0;z-index:1}
+.tbhd .ct{display:none}
+.tbwk{font-size:11px;font-weight:600;color:var(--acctx);background:var(--accbg);border-radius:7px;padding:6px 4px;text-align:center;line-height:1.15}
+.tbwk small{display:block;font-weight:400;font-size:9px;color:var(--mut);margin-top:2px}
+.tbwk.hoy{background:var(--acc);color:#fff}.tbwk.hoy small{color:#fff}
+.tbwk.pas{background:#EFEAE2;color:var(--mut)}
+.tbcel{background:var(--card);border:1px solid var(--line);border-radius:7px;padding:3px;min-height:36px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.tbcel.hoy{border-color:var(--acc)}
+.tbk{border-radius:5px;padding:4px 5px;background:var(--soft);border:1px solid var(--line);font-size:11px;line-height:1.2;cursor:pointer;min-width:0}
+.tbk .nm{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+.tbk b{display:block;font-weight:500;font-size:9.5px;color:var(--mut);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tbk.atr{background:var(--danbg);border-color:#F1CFC6}.tbk.atr b{color:var(--dantx)}
+.tbk.pr{background:var(--ambbg);border-color:#E6D9BD}.tbk.pr b{color:var(--ambtx)}
+.tbk.ok{opacity:.5}.tbk.ok .nm{text-decoration:line-through}
+.tbgrid.angosto{--wk:30px;gap:2px}
+.tbgrid.angosto .tbcel{padding:2px;gap:2px;border-radius:5px}
+.tbgrid.angosto .tbwk{padding:5px 1px;font-size:10px}
+.tbgrid.angosto .tbhd{font-size:9.5px;padding:5px 1px}
+.tbgrid.angosto .tbhd .lg{display:none}.tbgrid.angosto .tbhd .ct{display:inline}
+.tbgrid.angosto .tbwk small{display:none}
+.tbgrid.angosto .tbk{font-size:9px;padding:2px 2px 2px 3px;border:none;border-radius:4px;-webkit-hyphens:auto;hyphens:auto}
+.tbgrid.angosto .tbk .nm{word-break:normal;overflow-wrap:anywhere}
+.tbgrid.angosto .tbk .nm{-webkit-line-clamp:3}
+.tbgrid.angosto .tbk b{display:none}
 .chev{display:inline-block;width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);margin-left:8px;vertical-align:1px}
 .chev.abierto{transform:rotate(45deg);vertical-align:3px}
 .t .lb{font-size:10px;padding:2px 8px;border-radius:10px;white-space:nowrap;flex:none}
@@ -495,6 +526,7 @@ details.more[open] summary:before{content:'▾ '}
 <div class="tabs">
   <button class="tab on" data-v="inicio">Inicio</button>
   <button class="tab" data-v="cal">Calendario</button>
+  <button class="tab" data-v="tablero">Tablero</button>
   <button class="tab" data-v="ruta">Ruta</button>
   <button class="tab" data-v="notas">Notas</button>
   <button class="tab" data-v="faltas">Faltas</button>
@@ -947,11 +979,13 @@ function render(){
   var a=document.getElementById('app');
   if(VIEW==='inicio') a.innerHTML=vInicio();
   else if(VIEW==='cal') a.innerHTML=vCal();
+  else if(VIEW==='tablero') a.innerHTML=vTablero();
   else if(VIEW==='ruta') a.innerHTML=vRuta();
   else if(VIEW==='notas') a.innerHTML=vNotas();
   else if(VIEW==='faltas') a.innerHTML=vFaltas();
   else a.innerHTML=vClases();
   if(VIEW==='clases') initDrag();
+  if(VIEW==='tablero') ajustaTablero();
   var tb=document.querySelectorAll('.tab');
   for(var i=0;i<tb.length;i++) tb[i].classList.toggle('on', tb[i].getAttribute('data-v')===VIEW);
 }
@@ -1403,6 +1437,81 @@ function vCal(){
 }
 
 /* ---------- ruta ---------- */
+/* ---------- tablero: materias en columnas, semanas en filas ----------
+   Qué materias se ven y si las semanas pasadas están abiertas se guarda
+   solo en este dispositivo (es comodidad de vista, no dato). */
+function uiLee(k, def){ try{ var v=localStorage.getItem(K+'ui_'+k); return v==null?def:JSON.parse(v); }catch(e){ return def; } }
+function uiGuarda(k, v){ try{ localStorage.setItem(K+'ui_'+k, JSON.stringify(v)); }catch(e){} }
+function etqTab(T){
+  var dd=difDias(T.f), d=parseD(T.f);
+  if(T.st===2) return corta(T.f);
+  if(dd<0) return dd===-1?'ayer':(-dd)+' días tarde';
+  if(dd===0) return 'hoy'+(T.hora?' '+T.hora:'');
+  if(dd===1) return 'mañana'+(T.hora?' '+T.hora:'');
+  return DIAS[d.getDay()]+' '+d.getDate();
+}
+function vTablero(){
+  var ocultas=uiLee('tbx', []), pasAb=uiLee('tbp', false);
+  var todas=matsOrd().filter(function(M){ return M.clase; }).concat(matsOrd().filter(function(M){ return !M.clase; }));
+  var cols=todas.filter(function(M){ return ocultas.indexOf(M.id)<0; });
+  var semNow=semanaActual();
+
+  var h='<div class="tbchips">';
+  for(var i=0;i<todas.length;i++){
+    var M=todas[i], on=ocultas.indexOf(M.id)<0;
+    h+='<button class="tbchip'+(on?' on':'')+'" data-tbx="'+M.id+'"'+(on?' style="background:'+M.bg+';color:'+M.fg+'"':'')+'>'+esc(M.nombre)+'</button>';
+  }
+  h+='</div>';
+  if(!cols.length) return h+'<div class="box"><div class="empty">Prende al menos una materia arriba.</div></div>';
+
+  /* tareas por semana y materia; las "no se hizo" no salen */
+  var celdas={};
+  D.tar.forEach(function(T){
+    if(T.st===3 || !T.f) return;
+    var sn=semanaDeFecha(T.f); if(!sn) return;
+    var k=sn+'|'+T.m; (celdas[k]=celdas[k]||[]).push(T);
+  });
+
+  var nPas=semNow-1;
+  /* lo que quedó sin entregar en semanas pasadas no se esconde: se avisa en la barra */
+  var colIds=cols.map(function(M){ return M.id; });
+  var pendPas=D.tar.filter(function(T){ var sn=T.f&&semanaDeFecha(T.f); return sn && sn<semNow && !cerrada(T) && colIds.indexOf(T.m)>=0; }).length;
+  if(nPas>0) h+='<button class="tbpas" data-tbp="1">Semanas pasadas · '+nPas
+    +(pendPas?' · <b>'+pendPas+' sin entregar</b>':'')
+    +'<i class="chev'+(pasAb?' abierto':'')+'"></i></button>';
+
+  h+='<div class="tbgrid" id="tbGrid" data-n="'+cols.length+'" style="--n:'+cols.length+'"><div></div>';
+  for(var c=0;c<cols.length;c++)
+    h+='<div class="tbhd" style="background:'+cols[c].bg+';color:'+cols[c].fg+'"><span class="lg">'+esc(cols[c].nombre)+'</span><span class="ct">'+esc(abrev(cols[c]))+'</span></div>';
+
+  for(var s=(pasAb?1:semNow); s<=17; s++){
+    var esHoy=(s===semNow), pas=(s<semNow);
+    h+='<div class="tbwk'+(esHoy?' hoy':'')+(pas?' pas':'')+'">S'+s+'<small>'+rangoSemana(s)+'</small></div>';
+    for(var c2=0;c2<cols.length;c2++){
+      var ts=(celdas[s+'|'+cols[c2].id]||[]).slice();
+      ts.sort(function(a,b){ return a.f.localeCompare(b.f) || (a.hora||'zz').localeCompare(b.hora||'zz'); });
+      h+='<div class="tbcel'+(esHoy?' hoy':'')+'">';
+      for(var t=0;t<ts.length;t++){
+        var T=ts[t], dd=difDias(T.f), cl='';
+        if(T.st===2) cl=' ok';
+        else if(dd<0) cl=' atr';
+        else if(dd<=2) cl=' pr';
+        h+='<div class="tbk'+cl+'" data-ed="'+T.id+'"><span class="nm">'+esc(T.t)+'</span><b>'+etqTab(T)+'</b></div>';
+      }
+      h+='</div>';
+    }
+  }
+  h+='</div>';
+  return h;
+}
+/* si las columnas quedan angostas, las tarjetas se hacen compactas (sin fecha, nombre corto) */
+function ajustaTablero(){
+  var g=document.getElementById('tbGrid'); if(!g) return;
+  var n=+g.getAttribute('data-n')||1, ancho=(g.clientWidth-40)/n;
+  g.classList.toggle('angosto', ancho<92);
+}
+window.addEventListener('resize', function(){ if(VIEW==='tablero') ajustaTablero(); });
+
 function vRuta(){
   var etp=estadoEtapas(), h='';
   var late=etp.filter(function(x){ return x.estado==='late'; });
@@ -2556,6 +2665,12 @@ document.addEventListener('click', function(e){
 
   if(el.id==='btnBackup'){ modalBackup(); return; }
   t=el.closest('[data-backup]'); if(t){ modalBackup(); return; }
+  t=el.closest('[data-tbx]'); if(t){
+    var oc=uiLee('tbx', []), mid=t.getAttribute('data-tbx'), pos=oc.indexOf(mid);
+    if(pos>=0) oc.splice(pos,1); else oc.push(mid);
+    uiGuarda('tbx', oc); render(); return;
+  }
+  t=el.closest('[data-tbp]'); if(t){ uiGuarda('tbp', !uiLee('tbp', false)); render(); return; }
   t=el.closest('[data-nhtog]'); if(t){
     try{ localStorage.setItem(K+'ui_nh', nhAbierto()?'0':'1'); }catch(e3){}
     render(); return;
