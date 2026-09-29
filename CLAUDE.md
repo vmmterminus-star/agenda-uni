@@ -23,3 +23,12 @@ Agenda de la universidad de Valen (CUAAD, arquitectura): materias, tareas, calif
 - `widget.txt` es el script de Scriptable (tamaños chico, mediano y grande). Va sin llaves: Valen las escribe en el iPhone.
 - Los avisos de Pushover viven en Supabase (esquema `avisos`, revisión cada 15 min con pg_cron). Los SQL están en su carpeta ESCUELA, no en este repo.
 - Si cambias la forma de `widgetResumen()`, cambia también el script y el SQL.
+
+## Conexión con la agenda personal (acuerdo entre las dos apps)
+La agenda personal (`vmmterminus-star/agenda-personal`) muestra las tareas escolares y puede palomearlas. Las dos usan la tabla `escuela_sync` de Supabase. Reglas:
+- **Leer:** la personal lee solo `<código escolar>__widget` → `data.tar` = tareas pendientes (sin entregadas ni "no se hizo"), cada una `{i, t, m, c, f, p?, h?, k?, e?, x?}` (`i` id, `t` nombre, `m` materia, `f` fecha límite `AAAA-MM-DD`, `p` fecha preferida, `h` hora `HH:MM`, `k` tipo, `x:1` si es de tesis).
+- **Palomear:** la personal hace upsert de una fila por tarea: `code = <código escolar>__hecha__<i>`, `data = {v:1, i, st:2, ts:Date.now()}`. Para deshacer, la misma fila con `st:0` y `ts` nuevo.
+- **Nunca** escribe en `<código escolar>` ni en `<código escolar>__widget`.
+- Esta app, al sincronizar, lee `like.<código>__hecha__*`, aplica cada fila solo si su `ts` es más nuevo que el de la tarea (las "no se hizo" no se tocan), sube sus datos y luego borra esas filas (`code=eq…&data->>ts=eq…`, así no borra una que se volvió a mandar).
+- El widget escolar y los avisos (`avisos.revisar`) ya esconden las tareas con fila `__hecha__` en `st:2`, aunque esta app no se haya abierto.
+- Los avisos de Pushover de tareas escolares salen solo de esta app: la personal no debe mandarlos.

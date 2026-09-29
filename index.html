@@ -2323,11 +2323,17 @@ function syncCiclo(forzar){
   if(!forzar && ocupada()){ SYNC.pendiente=true; return Promise.resolve(); }
   SYNC.corriendo=true; setSync('run','');
   var url=cfgUrl()+'/rest/v1/'+TABLA+'?code=eq.'+encodeURIComponent(cfgCode())+'&select=data';
-  return fetch(url,{headers:heads()})
-    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
-    .then(function(rows){
+  /* palomitas que manda la agenda personal; si esto falla, la sincronización sigue igual */
+  var urlH=cfgUrl()+'/rest/v1/'+TABLA+'?code=like.'+encodeURIComponent(cfgCode()+'__hecha__')+'*&select=code,data';
+  var pideH=fetch(urlH,{headers:heads()}).then(function(r){ return r.ok ? r.json() : []; }).catch(function(){ return []; });
+  var pideD=fetch(url,{headers:heads()}).then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); });
+  return Promise.all([pideD, pideH])
+    .then(function(res){
+      var rows=res[0];
       var remoto = (rows && rows[0] && rows[0].data) ? rows[0].data : null;
       var cambio = remoto ? aplicarRemoto(remoto) : true;
+      var hechas = aplicarHechas(res[1]);
+      if(hechas.cambio) cambio=true;
       var mio = payload();
       var iguales = remoto && JSON.stringify(remoto)===JSON.stringify(mio);
       if(cambio){ guardaLocal(); render(); }
@@ -2336,7 +2342,7 @@ function syncCiclo(forzar){
       var ahoraISO=new Date().toISOString(), filas=[];
       if(!iguales) filas.push({code:cfgCode(), data:mio, updated_at:ahoraISO});
       if(W && W!==WLAST) filas.push({code:cfgCode()+'__widget', data:JSON.parse(W), updated_at:ahoraISO});
-      if(!filas.length){ SYNC.corriendo=false; SYNC.ultimo=Date.now(); setSync('ok',''); return; }
+      if(!filas.length){ borraHechas(hechas.borrar); SYNC.corriendo=false; SYNC.ultimo=Date.now(); setSync('ok',''); return; }
       return fetch(cfgUrl()+'/rest/v1/'+TABLA,{
         method:'POST',
         headers:Object.assign({}, heads(), {'Prefer':'resolution=merge-duplicates,return=minimal'}),
@@ -2344,6 +2350,7 @@ function syncCiclo(forzar){
       }).then(function(r2){
         if(!r2.ok) throw new Error('HTTP '+r2.status);
         if(W) WLAST=W;
+        borraHechas(hechas.borrar);   /* solo después de guardar en la nube lo que aplicamos */
         SYNC.corriendo=false; SYNC.ultimo=Date.now(); setSync('ok','');
       });
     })
@@ -2354,6 +2361,32 @@ function syncCiclo(forzar){
     .then(function(){
       if(SYNC.pendiente){ SYNC.pendiente=false; setTimeout(function(){ syncCiclo(); }, 800); }
     });
+}
+
+/* ============ palomitas desde la agenda personal ============
+   La agenda personal nunca toca los datos de esta app. Por cada tarea que
+   palomea (o despalomea) deja una fila aparte: <código>__hecha__<id de tarea>,
+   con {v:1, i:id, st:2 ó 0, ts:milisegundos}. Aquí se aplica solo si es más
+   reciente que el último cambio de esa tarea, y luego se borra la fila.
+   Las "no se hizo" no se tocan. */
+function aplicarHechas(rows){
+  var out={cambio:false, borrar:[]};
+  (rows||[]).forEach(function(r){
+    var d=r && r.data; if(!d || !d.i) return;
+    out.borrar.push({code:r.code, ts:d.ts});
+    var T=tarea(d.i); if(!T || T.st===3) return;
+    if((+d.ts||0) <= (T.ts||0)) return;
+    var nuevo = d.st===2 ? 2 : (T.st===2 ? 0 : T.st);
+    if(nuevo!==T.st){ T.st=nuevo; T.ts=+d.ts; out.cambio=true; }
+  });
+  return out;
+}
+/* borra cada fila solo si no cambió mientras tanto (si la volvieron a mandar, se queda) */
+function borraHechas(lista){
+  (lista||[]).forEach(function(x){
+    fetch(cfgUrl()+'/rest/v1/'+TABLA+'?code=eq.'+encodeURIComponent(x.code)+'&data->>ts=eq.'+encodeURIComponent(x.ts),
+      {method:'DELETE', headers:heads()}).catch(function(){});
+  });
 }
 
 /* ============ resumen para el widget del iPhone y los avisos de Pushover ============

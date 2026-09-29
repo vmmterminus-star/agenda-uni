@@ -280,6 +280,17 @@ async function cargar(){
   try{ rows = JSON.parse(txt); }
   catch(e){ return { error: "Supabase respondió algo raro. Revisa la URL de arriba. Respuesta: " + String(txt).slice(0, 80) }; }
   if(Array.isArray(rows) && rows[0] && rows[0].data){
+    /* lo que ya palomeaste en tu agenda personal no sale, aunque aún no abras la escolar */
+    try{
+      const rh = new Request(base + "/rest/v1/escuela_sync?code=like." + encodeURIComponent(CODIGO.trim() + "__hecha__") + "*&select=data");
+      rh.headers = { apikey: LLAVE.trim(), Authorization: "Bearer " + LLAVE.trim() };
+      rh.timeoutInterval = 8;
+      const hs = await rh.loadJSON();
+      if(Array.isArray(hs)){
+        const fuera = hs.filter(x => x.data && x.data.st === 2).map(x => x.data.i);
+        if(fuera.length) rows[0].data.tar = (rows[0].data.tar || []).filter(T => fuera.indexOf(T.i) < 0);
+      }
+    } catch(e){}
     const g = { data: rows[0].data, at: rows[0].updated_at || null, leido: Date.now() };
     fm.writeString(ruta, JSON.stringify(g));
     return { R: g.data, at: g.at, leido: g.leido };
