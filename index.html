@@ -126,7 +126,10 @@ textarea{resize:vertical;min-height:60px}
 .tbwk small{display:block;font-weight:400;font-size:9px;color:var(--mut);margin-top:2px}
 .tbwk.hoy{background:var(--acc);color:#fff}.tbwk.hoy small{color:#fff}
 .tbwk.pas{background:#EFEAE2;color:var(--mut)}
-.tbcel{background:var(--card);border:1px solid var(--line);border-radius:7px;padding:3px;min-height:36px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.tbcel{background:var(--card);border:1px solid var(--line);border-radius:7px;padding:3px;min-height:36px;display:flex;flex-direction:column;min-width:0}
+.tbsc{display:flex;flex-direction:column;gap:3px;max-height:112px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.tbcnt{display:none;font-size:9.5px;color:var(--mut);text-align:center;padding:3px 0 1px;border-top:1px solid var(--line);margin-top:3px}
+.tbcel.mas .tbcnt{display:block}
 .tbcel.hoy{border-color:var(--acc)}
 .tbk{border-radius:5px;padding:4px 5px;background:var(--soft);border:1px solid var(--line);font-size:11px;line-height:1.2;cursor:pointer;min-width:0}
 .tbk .nm{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
@@ -135,7 +138,8 @@ textarea{resize:vertical;min-height:60px}
 .tbk.pr{background:var(--ambbg);border-color:#E6D9BD}.tbk.pr b{color:var(--ambtx)}
 .tbk.ok{opacity:.5}.tbk.ok .nm{text-decoration:line-through}
 .tbgrid.angosto{--wk:30px;gap:2px}
-.tbgrid.angosto .tbcel{padding:2px;gap:2px;border-radius:5px}
+.tbgrid.angosto .tbcel{padding:2px;border-radius:5px}
+.tbgrid.angosto .tbsc{gap:2px;max-height:96px}
 .tbgrid.angosto .tbwk{padding:5px 1px;font-size:10px}
 .tbgrid.angosto .tbhd{font-size:9.5px;padding:5px 1px}
 .tbgrid.angosto .tbhd .lg{display:none}.tbgrid.angosto .tbhd .ct{display:inline}
@@ -392,7 +396,8 @@ details.more[open] summary:before{content:'▾ '}
 .paso{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12.5px}
 .paso .pck{width:15px;height:15px;border:1.4px solid var(--line2);border-radius:4px;background:#fff;flex:none;padding:0;cursor:pointer}
 .paso .pck.on{background:var(--grn);border-color:var(--grn)}
-.paso .ptx{flex:1;min-width:0}
+.paso .ptx{flex:1;min-width:0;border:1px solid transparent;background:transparent;font:inherit;color:inherit;padding:2px 5px;margin:-2px 0;border-radius:5px}
+.paso .ptx:focus{border-color:var(--line2);background:#fff;outline:none}
 .paso.done .ptx{text-decoration:line-through;color:var(--hint)}
 .paso .pdel{border:none;background:transparent;color:var(--hint);font-size:11px;padding:2px 4px;flex:none}
 .paso .pdel:hover{color:var(--dan)}
@@ -1490,7 +1495,7 @@ function vTablero(){
     for(var c2=0;c2<cols.length;c2++){
       var ts=(celdas[s+'|'+cols[c2].id]||[]).slice();
       ts.sort(function(a,b){ return a.f.localeCompare(b.f) || (a.hora||'zz').localeCompare(b.hora||'zz'); });
-      h+='<div class="tbcel'+(esHoy?' hoy':'')+'">';
+      h+='<div class="tbcel'+(esHoy?' hoy':'')+'"><div class="tbsc">';
       for(var t=0;t<ts.length;t++){
         var T=ts[t], dd=difDias(T.f), cl='';
         if(T.st===2) cl=' ok';
@@ -1498,7 +1503,7 @@ function vTablero(){
         else if(dd<=2) cl=' pr';
         h+='<div class="tbk'+cl+'" data-ed="'+T.id+'"><span class="nm">'+esc(T.t)+'</span><b>'+etqTab(T)+'</b></div>';
       }
-      h+='</div>';
+      h+='</div>'+(ts.length?'<div class="tbcnt">'+ts.length+(ts.length===1?' tarea':' tareas')+'</div>':'')+'</div>';
     }
   }
   h+='</div>';
@@ -1509,6 +1514,9 @@ function ajustaTablero(){
   var g=document.getElementById('tbGrid'); if(!g) return;
   var n=+g.getAttribute('data-n')||1, ancho=(g.clientWidth-40)/n;
   g.classList.toggle('angosto', ancho<92);
+  /* el contador de abajo solo sale si no caben todas y hay que deslizar */
+  var sc=g.querySelectorAll('.tbsc');
+  for(var i=0;i<sc.length;i++) sc[i].parentNode.classList.toggle('mas', sc[i].scrollHeight > sc[i].clientHeight+2);
 }
 window.addEventListener('resize', function(){ if(VIEW==='tablero') ajustaTablero(); });
 
@@ -1921,7 +1929,7 @@ function modalTarea(id, fechaDef, matDef){
   for(var p=0;p<T.pasos.length;p++){
     h+='<div class="paso'+(T.pasos[p].ok?' done':'')+'" data-pi="'+p+'">'
       +'<button class="pck'+(T.pasos[p].ok?' on':'')+'" data-pok="'+p+'"></button>'
-      +'<span class="ptx" data-pi="'+p+'">'+esc(T.pasos[p].t)+'</span>'
+      +'<input class="ptx" data-pin="'+p+'" value="'+esc(T.pasos[p].t)+'" autocomplete="off">'
       +'<button class="pdel" data-pdel="'+p+'" aria-label="Quitar">✕</button></div>';
   }
   h+='</div>';
@@ -1983,7 +1991,7 @@ function modalTarea(id, fechaDef, matDef){
   h+='<div class="acts">'+(id?'<button class="del" data-del="'+id+'">Borrar</button>':'')
     +'<button data-cancel="1">Cancelar</button><button class="pri" data-save="'+(id||'')+'">Guardar</button></div>';
   abrir(h);
-  PASOS = T.pasos.slice();
+  PASOS = T.pasos.map(function(x){ return {t:x.t, ok:!!x.ok}; });   /* copia: si cancelas, no cambia nada */
   autoCrecer(document.getElementById('fN'));
   if(nueva){ var ft=document.getElementById('fT'); if(ft) ft.focus(); }
 }
@@ -1996,7 +2004,7 @@ function pintaPasos(){
   for(var p=0;p<PASOS.length;p++){
     h+='<div class="paso'+(PASOS[p].ok?' done':'')+'" data-pi="'+p+'">'
       +'<button class="pck'+(PASOS[p].ok?' on':'')+'" data-pok="'+p+'"></button>'
-      +'<span class="ptx" data-pi="'+p+'">'+esc(PASOS[p].t)+'</span>'
+      +'<input class="ptx" data-pin="'+p+'" value="'+esc(PASOS[p].t)+'" autocomplete="off">'
       +'<button class="pdel" data-pdel="'+p+'" aria-label="Quitar">✕</button></div>';
   }
   cont.innerHTML=h;
@@ -2572,7 +2580,7 @@ document.addEventListener('click', function(e){
       comp: document.getElementById('fC').value,
       alim: (document.getElementById('fA')||{value:''}).value,
       nota: document.getElementById('fN').value,
-      pasos: PASOS.slice()
+      pasos: PASOS.filter(function(x){ return (x.t||'').trim(); })
     };
     if(id2){ var T2=tarea(id2); for(var kk in obj) T2[kk]=obj[kk]; stamp(T2); }
     else { obj.id='c'+Date.now()+'_'+Math.random().toString(36).slice(2,7); stamp(obj); D.tar.push(obj); }
@@ -2752,6 +2760,15 @@ document.addEventListener('change', function(e){
   }
 });
 
+/* editar el texto de un paso: se guarda al darle Guardar a la tarea */
+document.addEventListener('input', function(e){
+  var el=e.target;
+  if(el.classList && el.classList.contains('ptx') && el.hasAttribute('data-pin')){
+    var pi=+el.getAttribute('data-pin');
+    if(PASOS[pi]) PASOS[pi].t=el.value;
+  }
+});
+
 document.addEventListener('keydown', function(e){
   if(e.key==='Escape'){ cerrar(); return; }
   if(e.key!=='Enter') return;
@@ -2768,6 +2785,7 @@ document.addEventListener('keydown', function(e){
     return;
   }
   /* Enter en el campo de paso: lo agrega y deja listo el siguiente */
+  if(el.classList && el.classList.contains('ptx')){ e.preventDefault(); el.blur(); return; }
   if(el.id==='pNuevo'){
     e.preventDefault();
     var v=el.value.trim(); if(!v) return;
